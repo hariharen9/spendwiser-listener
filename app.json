@@ -2,7 +2,7 @@
   "expo": {
     "name": "SpendWiser Listener",
     "slug": "spendwiser-listener-app",
-    "version": "1.0.2",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",

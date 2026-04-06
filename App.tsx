@@ -1,31 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   TextInput,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
   SafeAreaView,
   StatusBar,
   Alert,
   ActivityIndicator,
   PermissionsAndroid,
   Platform,
+  Animated,
+  Easing,
 } from 'react-native';
-import { 
-  Link2, 
-  Settings, 
-  ShieldCheck, 
-  ShieldAlert, 
-  Activity, 
-  RefreshCw, 
-  Play, 
+import {
+  Radio,
+  ShieldCheck,
+  ShieldAlert,
+  RefreshCw,
+  Play,
   Square,
-  Key
+  Key,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Zap,
+  Eye,
+  EyeOff,
 } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
-import { getSettings, saveSettings, getLog, addToLog, processQueue } from './src/services/api';
+import { getSettings, saveSettings, getLog, processQueue } from './src/services/api';
 import { AppSettings, ActivityLogEntry } from './src/types';
 import { startSmsListener, stopSmsListener, registerQueueTask } from './src/services/background';
 
@@ -39,12 +45,59 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Pulsing dot component — uses native driver, zero JS thread cost
+function PulsingDot({ color }: { color: string }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0.6)).current;
+
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(scale, { toValue: 1.8, duration: 1200, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 1, duration: 1200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
+        ]),
+        Animated.sequence([
+          Animated.timing(opacity, { toValue: 0, duration: 1200, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.6, duration: 1200, easing: Easing.in(Easing.ease), useNativeDriver: true }),
+        ]),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, []);
+
+  return (
+    <View style={{ width: 14, height: 14, justifyContent: 'center', alignItems: 'center' }}>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          width: 14,
+          height: 14,
+          borderRadius: 7,
+          backgroundColor: color,
+          transform: [{ scale }],
+          opacity,
+        }}
+      />
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+    </View>
+  );
+}
+
+// Static dot for non-listening states
+function StaticDot({ color }: { color: string }) {
+  return <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />;
+}
+
 export default function App() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [log, setLog] = useState<ActivityLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -59,7 +112,12 @@ export default function App() {
     setLog(l);
     setApiKeyInput(s.apiKey);
     setLoading(false);
-    
+
+    // Auto-expand settings if no API key is set
+    if (!s.apiKey) {
+      setShowSettings(true);
+    }
+
     if (s.isListening && s.apiKey) {
       startSmsListener();
     }
@@ -72,14 +130,14 @@ export default function App() {
           PermissionsAndroid.PERMISSIONS.RECEIVE_SMS,
           PermissionsAndroid.PERMISSIONS.READ_SMS,
         ]);
-        
+
         if (
           granted['android.permission.RECEIVE_SMS'] !== PermissionsAndroid.RESULTS.GRANTED ||
           granted['android.permission.READ_SMS'] !== PermissionsAndroid.RESULTS.GRANTED
         ) {
           Alert.alert(
-            "Permissions Required",
-            "SpendWiser Listener needs SMS access to detect bank transaction alerts. Your messages are only checked locally."
+            'Permissions Required',
+            'SpendWiser Listener needs SMS access to detect bank transaction alerts. Your messages are only checked locally — nothing is stored.'
           );
         }
       } catch (err) {
@@ -90,24 +148,30 @@ export default function App() {
 
   const handleSaveApiKey = async () => {
     if (!settings) return;
-    const newSettings = { ...settings, apiKey: apiKeyInput };
+    if (!apiKeyInput.trim()) {
+      Alert.alert('Error', 'Please enter an API Key.');
+      return;
+    }
+    const newSettings = { ...settings, apiKey: apiKeyInput.trim() };
     await saveSettings(newSettings);
     setSettings(newSettings);
-    Alert.alert("Success", "API Key saved successfully.");
+    setShowSettings(false);
+    Alert.alert('Saved', 'API Key saved successfully.');
   };
 
   const toggleListening = async () => {
     if (!settings) return;
     if (!settings.apiKey && !settings.isListening) {
-      Alert.alert("Error", "Please enter an API Key first.");
+      Alert.alert('Missing Key', 'Please enter an API Key first.');
+      setShowSettings(true);
       return;
     }
-    
+
     const newIsListening = !settings.isListening;
     const newSettings = { ...settings, isListening: newIsListening };
     await saveSettings(newSettings);
     setSettings(newSettings);
-    
+
     if (newIsListening) {
       startSmsListener();
     } else {
@@ -125,115 +189,227 @@ export default function App() {
     setRefreshing(false);
   };
 
+  const maskApiKey = (key: string) => {
+    if (key.length <= 8) return '••••••••';
+    return `${key.slice(0, 4)}••••${key.slice(-4)}`;
+  };
+
+  const getTimeAgo = (timestamp: string) => {
+    const diff = Date.now() - new Date(timestamp).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  };
+
   if (loading || !settings) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366F1" />
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#818CF8" />
+        <Text style={styles.loadingText}>Loading…</Text>
       </View>
     );
   }
 
-  const getStatusColor = () => {
-    if (!settings.apiKey) return '#EAB308'; // yellow
-    return settings.isListening ? '#22C55E' : '#EF4444'; // green : red
-  };
+  const statusColor = !settings.apiKey ? '#FBBF24' : settings.isListening ? '#34D399' : '#F87171';
+  const statusText = !settings.apiKey ? 'No API Key' : settings.isListening ? 'Listening' : 'Stopped';
+  const successCount = log.filter(e => e.status === 'success').length;
+  const queuedCount = log.filter(e => e.status === 'queued').length;
 
-  const getStatusText = () => {
-    if (!settings.apiKey) return 'No API Key';
-    return settings.isListening ? 'Listening' : 'Stopped';
+  const renderLogEntry = ({ item }: { item: ActivityLogEntry }) => {
+    const isSuccess = item.status === 'success';
+    const isQueued = item.status === 'queued';
+    const iconColor = isSuccess ? '#34D399' : isQueued ? '#FBBF24' : '#64748B';
+    const Icon = isSuccess ? ShieldCheck : isQueued ? RefreshCw : ShieldAlert;
+
+    return (
+      <View style={styles.logEntry}>
+        <View style={styles.logTopRow}>
+          <View style={[styles.logIconBadge, { backgroundColor: `${iconColor}18` }]}>
+            <Icon size={14} color={iconColor} />
+          </View>
+          <Text style={styles.logSummary} numberOfLines={1}>{item.summary}</Text>
+          <Text style={styles.logTimeAgo}>{getTimeAgo(item.timestamp)}</Text>
+        </View>
+        {item.error && (
+          <Text style={styles.logError} numberOfLines={1}>⚠ {item.error}</Text>
+        )}
+      </View>
+    );
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
-      
+      <StatusBar barStyle="light-content" backgroundColor="#0B1120" />
+
+      {/* Header */}
       <View style={styles.header}>
-        <Link2 size={24} color="#6366F1" />
-        <Text style={styles.headerTitle}>SpendWiser Listener</Text>
+        <View style={styles.headerLeft}>
+          <Radio size={20} color="#818CF8" />
+          <Text style={styles.headerTitle}>SpendWiser Listener</Text>
+        </View>
+        <Text style={styles.headerVersion}>v1.0.2</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* API Key Section */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Key size={20} color="#94A3B8" />
-            <Text style={styles.cardTitle}>API Key</Text>
+      {/* Status Hero Card */}
+      <View style={styles.heroCard}>
+        <View style={styles.heroTop}>
+          <View style={styles.heroStatusRow}>
+            {settings.isListening && settings.apiKey ? (
+              <PulsingDot color="#34D399" />
+            ) : (
+              <StaticDot color={statusColor} />
+            )}
+            <Text style={[styles.heroStatusText, { color: statusColor }]}>{statusText}</Text>
           </View>
-          <TextInput
-            style={styles.input}
-            placeholder="Paste your API key..."
-            placeholderTextColor="#64748B"
-            value={apiKeyInput}
-            onChangeText={setApiKeyInput}
-            secureTextEntry={apiKeyInput.length > 0}
-          />
-          <TouchableOpacity style={styles.button} onPress={handleSaveApiKey}>
-            <Text style={styles.buttonText}>Save Key</Text>
+          <TouchableOpacity
+            style={[
+              styles.heroToggle,
+              { backgroundColor: settings.isListening ? '#F8717118' : '#34D39918' },
+            ]}
+            onPress={toggleListening}
+            activeOpacity={0.7}
+          >
+            {settings.isListening ? (
+              <Square size={16} color="#F87171" fill="#F87171" />
+            ) : (
+              <Play size={16} color="#34D399" fill="#34D399" />
+            )}
+            <Text
+              style={[styles.heroToggleText, { color: settings.isListening ? '#F87171' : '#34D399' }]}
+            >
+              {settings.isListening ? 'Stop' : 'Start'}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Status Section */}
-        <View style={styles.card}>
-          <View style={styles.statusRow}>
-            <View>
-              <Text style={styles.statusLabel}>Status</Text>
-              <View style={styles.statusIndicatorRow}>
-                <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
-                <Text style={[styles.statusValue, { color: getStatusColor() }]}>{getStatusText()}</Text>
-              </View>
-            </View>
-            <TouchableOpacity 
-              style={[styles.toggleButton, { backgroundColor: settings.isListening ? '#EF444420' : '#22C55E20' }]} 
-              onPress={toggleListening}
-            >
-              {settings.isListening ? (
-                <Square size={20} color="#EF4444" fill="#EF4444" />
-              ) : (
-                <Play size={20} color="#22C55E" fill="#22C55E" />
-              )}
-              <Text style={[styles.toggleButtonText, { color: settings.isListening ? '#EF4444' : '#22C55E' }]}>
-                {settings.isListening ? 'Stop' : 'Start'}
-              </Text>
-            </TouchableOpacity>
+        {/* Quick Stats Row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Zap size={13} color="#818CF8" />
+            <Text style={styles.statValue}>{successCount}</Text>
+            <Text style={styles.statLabel}>Forwarded</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Clock size={13} color="#FBBF24" />
+            <Text style={styles.statValue}>{queuedCount}</Text>
+            <Text style={styles.statLabel}>Queued</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <ShieldCheck size={13} color="#34D399" />
+            <Text style={styles.statValue}>{log.length}</Text>
+            <Text style={styles.statLabel}>Total</Text>
           </View>
         </View>
+      </View>
 
-        {/* Activity Log */}
-        <View style={[styles.card, { flex: 1 }]}>
-          <View style={styles.cardHeader}>
-            <Activity size={20} color="#94A3B8" />
-            <Text style={styles.cardTitle}>Activity Log</Text>
-            <TouchableOpacity onPress={handleRefresh} disabled={refreshing}>
-              <RefreshCw size={18} color="#6366F1" style={refreshing ? { opacity: 0.5 } : {}} />
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.logContainer}>
-            {log.length === 0 ? (
-              <Text style={styles.emptyText}>No activity recorded yet.</Text>
-            ) : (
-              log.map((entry) => (
-                <View key={entry.id} style={styles.logEntry}>
-                  <View style={styles.logIconRow}>
-                    {entry.status === 'success' ? (
-                      <ShieldCheck size={16} color="#22C55E" />
-                    ) : entry.status === 'queued' ? (
-                      <RefreshCw size={16} color="#EAB308" />
-                    ) : (
-                      <ShieldAlert size={16} color="#EF4444" />
-                    )}
-                    <Text style={styles.logSummary}>{entry.summary}</Text>
-                  </View>
-                  <Text style={styles.logTime}>
-                    {new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    {entry.error ? ` • ${entry.error}` : ''}
-                  </Text>
-                </View>
-              ))
+      {/* Collapsible Settings */}
+      <TouchableOpacity
+        style={styles.collapsibleHeader}
+        onPress={() => setShowSettings(!showSettings)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.collapsibleLeft}>
+          <Key size={16} color="#94A3B8" />
+          <Text style={styles.collapsibleTitle}>Settings</Text>
+          {settings.apiKey ? (
+            <View style={styles.keyBadge}>
+              <Text style={styles.keyBadgeText}>Key Active</Text>
+            </View>
+          ) : (
+            <View style={[styles.keyBadge, { backgroundColor: '#FBBF2420' }]}>
+              <Text style={[styles.keyBadgeText, { color: '#FBBF24' }]}>No Key</Text>
+            </View>
+          )}
+        </View>
+        {showSettings ? (
+          <ChevronUp size={18} color="#64748B" />
+        ) : (
+          <ChevronDown size={18} color="#64748B" />
+        )}
+      </TouchableOpacity>
+
+      {showSettings && (
+        <View style={styles.settingsPanel}>
+          <Text style={styles.settingsLabel}>API Key</Text>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              placeholder="Paste your API key from SpendWiser…"
+              placeholderTextColor="#475569"
+              value={apiKeyInput}
+              onChangeText={setApiKeyInput}
+              secureTextEntry={!showApiKey && apiKeyInput.length > 0}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {apiKeyInput.length > 0 && (
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowApiKey(!showApiKey)}
+              >
+                {showApiKey ? (
+                  <EyeOff size={18} color="#64748B" />
+                ) : (
+                  <Eye size={18} color="#64748B" />
+                )}
+              </TouchableOpacity>
             )}
           </View>
+          {settings.apiKey ? (
+            <View style={styles.savedKeyRow}>
+              <Text style={styles.savedKeyLabel}>Current: </Text>
+              <Text style={styles.savedKeyValue}>{maskApiKey(settings.apiKey)}</Text>
+            </View>
+          ) : null}
+          <TouchableOpacity style={styles.saveButton} onPress={handleSaveApiKey} activeOpacity={0.8}>
+            <Text style={styles.saveButtonText}>Save Key</Text>
+          </TouchableOpacity>
         </View>
-      </ScrollView>
+      )}
+
+      {/* Activity Log */}
+      <View style={styles.logSection}>
+        <View style={styles.logHeader}>
+          <Text style={styles.logTitle}>Activity Log</Text>
+          <TouchableOpacity
+            onPress={handleRefresh}
+            disabled={refreshing}
+            style={styles.refreshButton}
+            activeOpacity={0.6}
+          >
+            {refreshing ? (
+              <ActivityIndicator size="small" color="#818CF8" />
+            ) : (
+              <RefreshCw size={16} color="#818CF8" />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <FlatList
+          data={log}
+          keyExtractor={(item) => item.id}
+          renderItem={renderLogEntry}
+          contentContainerStyle={log.length === 0 ? styles.emptyListContainer : styles.logList}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Radio size={40} color="#1E293B" />
+              <Text style={styles.emptyTitle}>No activity yet</Text>
+              <Text style={styles.emptySubtitle}>
+                {settings.isListening
+                  ? 'Waiting for bank SMS…'
+                  : 'Start listening to capture transactions'}
+              </Text>
+            </View>
+          }
+          showsVerticalScrollIndicator={false}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -241,138 +417,307 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#0B1120',
   },
-  centered: {
+  loadingContainer: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#0B1120',
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
   },
+  loadingText: {
+    color: '#64748B',
+    fontSize: 14,
+  },
+
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    paddingVertical: 14,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#F8FAFC',
-    marginLeft: 10,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  card: {
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderBottomColor: '#334155',
-  },
-  cardHeader: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    gap: 10,
   },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#94A3B8',
-    marginLeft: 8,
-    flex: 1,
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#F1F5F9',
+    letterSpacing: 0.3,
   },
-  input: {
-    backgroundColor: '#0F172A',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: '#F8FAFC',
-    fontSize: 14,
-    marginBottom: 12,
+  headerVersion: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '500',
+  },
+
+  // Hero Card
+  heroCard: {
+    marginHorizontal: 16,
+    backgroundColor: '#111827',
+    borderRadius: 16,
+    padding: 18,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#1E293B',
   },
-  button: {
-    backgroundColor: '#6366F1',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  statusRow: {
+  heroTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 18,
   },
-  statusLabel: {
-    fontSize: 12,
-    color: '#94A3B8',
-    marginBottom: 4,
-  },
-  statusIndicatorRow: {
+  heroStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
+  heroStatusText: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
-  statusValue: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  toggleButton: {
+  heroToggle: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: 9,
+    borderRadius: 22,
   },
-  toggleButtonText: {
+  heroToggleText: {
     fontWeight: '700',
-    fontSize: 14,
-    marginLeft: 6,
+    fontSize: 13,
   },
-  logContainer: {
-    marginTop: 8,
-  },
-  logEntry: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: '#0B112080',
+    borderRadius: 10,
     paddingVertical: 12,
   },
-  logIconRow: {
+  statItem: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  statValue: {
+    color: '#F1F5F9',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  statLabel: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  statDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: '#1E293B',
+  },
+
+  // Collapsible Settings
+  collapsibleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  collapsibleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  collapsibleTitle: {
+    color: '#CBD5E1',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  keyBadge: {
+    backgroundColor: '#34D39918',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 4,
+  },
+  keyBadgeText: {
+    color: '#34D399',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  // Settings Panel
+  settingsPanel: {
+    marginHorizontal: 16,
+    marginTop: 2,
+    backgroundColor: '#111827',
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: '#1E293B',
+  },
+  settingsLabel: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  input: {
+    flex: 1,
+    backgroundColor: '#0B1120',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: '#F1F5F9',
+    fontSize: 13,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 12,
+    padding: 4,
+  },
+  savedKeyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  savedKeyLabel: {
+    color: '#64748B',
+    fontSize: 12,
+  },
+  savedKeyValue: {
+    color: '#818CF8',
+    fontSize: 12,
+    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
+    fontWeight: '600',
+  },
+  saveButton: {
+    backgroundColor: '#6366F1',
+    borderRadius: 10,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 0.3,
+  },
+
+  // Activity Log
+  logSection: {
+    flex: 1,
+    marginTop: 14,
+    marginHorizontal: 16,
+  },
+  logHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  logTitle: {
+    color: '#CBD5E1',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  refreshButton: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#818CF810',
+  },
+  logList: {
+    paddingBottom: 30,
+  },
+  logEntry: {
+    backgroundColor: '#111827',
+    borderRadius: 10,
+    padding: 13,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  logTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  logIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   logSummary: {
-    color: '#F8FAFC',
-    fontSize: 14,
+    flex: 1,
+    color: '#E2E8F0',
+    fontSize: 13,
     fontWeight: '500',
-    marginLeft: 8,
   },
-  logTime: {
-    color: '#64748B',
-    fontSize: 12,
-    marginTop: 4,
-    marginLeft: 24,
+  logTimeAgo: {
+    color: '#475569',
+    fontSize: 11,
+    fontWeight: '500',
   },
-  emptyText: {
-    color: '#64748B',
-    fontSize: 14,
+  logError: {
+    color: '#F87171',
+    fontSize: 11,
+    marginTop: 6,
+    marginLeft: 38,
+    fontWeight: '500',
+  },
+
+  // Empty State
+  emptyListContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 50,
+    gap: 8,
+  },
+  emptyTitle: {
+    color: '#475569',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  emptySubtitle: {
+    color: '#334155',
+    fontSize: 13,
     textAlign: 'center',
-    marginTop: 20,
+    maxWidth: 220,
+    lineHeight: 18,
   },
 });

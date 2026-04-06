@@ -11,8 +11,18 @@ const AMOUNT_PATTERNS = [
   /\b\d+(?:\.\d{2})?\b/,                    // Any plain number/decimal
 ];
 
+const EXCLUDE_KEYWORDS = [
+  'otp', 'one time password', 'verification code',
+  'login', 'password', 'reset', 'cvv', 'pin',
+];
+
 export function isTransactionSms(message: string): boolean {
   const lower = message.toLowerCase();
+
+  // Reject OTPs and auth messages first
+  if (EXCLUDE_KEYWORDS.some(kw => lower.includes(kw))) {
+    return false;
+  }
   
   // Basic keywords check
   const hasKeyword = TRANSACTION_KEYWORDS.some(kw => lower.includes(kw));
