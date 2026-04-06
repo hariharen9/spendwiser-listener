@@ -2,11 +2,11 @@
   "expo": {
     "name": "SpendWiser Listener",
     "slug": "spendwiser-listener-app",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -20,16 +20,16 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F172A"
       },
-      "package": "com.spendwiser.listener",
+      "package": "com.hariharen.spendwiser.sms",
       "permissions": [
         "RECEIVE_SMS",
         "READ_SMS",
         "INTERNET",
         "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_SPECIAL_USE",
         "RECEIVE_BOOT_COMPLETED",
         "POST_NOTIFICATIONS",
-        "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.WAKE_LOCK"
+        "WAKE_LOCK"
       ]
     },
     "web": {

@@ -4,10 +4,8 @@ import { NativeModules, NativeEventEmitter } from 'react-native';
 import { getSettings, forwardToWebhook, addToQueue, addToLog, processQueue } from './api';
 import { shouldForwardSms } from '../utils/filter';
 
-const SMS_TASK = 'BACKGROUND_SMS_TASK';
 const QUEUE_TASK = 'BACKGROUND_QUEUE_TASK';
 
-// Define the background fetch task for queue processing
 TaskManager.defineTask(QUEUE_TASK, async () => {
   try {
     const settings = await getSettings();
@@ -34,7 +32,7 @@ export const startSmsListener = async () => {
 
   const { SmsListener } = NativeModules;
   if (!SmsListener) {
-    console.warn('SmsListener native module not found. Make sure you are running a development build.');
+    console.warn('SmsListener native module not found.');
     return;
   }
 
@@ -42,6 +40,9 @@ export const startSmsListener = async () => {
   
   const handleSms = async (event: { body: string; sender: string }) => {
     const { body, sender } = event;
+    
+    // DEBUG: Log that we saw ANY message
+    console.log(`Received SMS from ${sender}: ${body}`);
     
     if (shouldForwardSms(sender, body)) {
       const result = await forwardToWebhook(settings.apiKey, settings.webhookUrl, body);
@@ -51,6 +52,13 @@ export const startSmsListener = async () => {
         await addToQueue(body);
         await addToLog({ smsText: body, status: 'queued', error: result.error });
       }
+    } else {
+      // Log skipped messages locally so the user knows the app is at least seeing them
+      await addToLog({ 
+        smsText: body, 
+        status: 'failed', 
+        error: 'Filtered out (No keywords/amount)' 
+      });
     }
   };
 
