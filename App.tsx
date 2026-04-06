@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
-  SafeAreaView,
   StatusBar,
   Alert,
   ActivityIndicator,
@@ -15,6 +14,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   Radio,
   ShieldCheck,
@@ -242,8 +242,9 @@ export default function App() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0B1120" />
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.container} edges={['top', 'right', 'left']}>
+        <StatusBar barStyle="light-content" backgroundColor="#0B1120" translucent />
 
       {/* Header */}
       <View style={styles.header}>
@@ -410,7 +411,8 @@ export default function App() {
           showsVerticalScrollIndicator={false}
         />
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
