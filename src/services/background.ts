@@ -1,6 +1,6 @@
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
-import { NativeModules, NativeEventEmitter } from 'react-native';
+import SmsListener from 'react-native-android-sms-listener';
 import { getSettings, forwardToWebhook, addToQueue, addToLog, processQueue } from './api';
 import { shouldForwardSms } from '../utils/filter';
 
@@ -26,41 +26,58 @@ export const registerQueueTask = async () => {
   });
 };
 
-export const startSmsListener = async () => {
-  const settings = await getSettings();
-  if (!settings.apiKey || !settings.isListening) return;
+// Holds the subscription so we never register more than one listener
+let smsSubscription: { remove: () => void } | null = null;
 
-  const { SmsListener } = NativeModules;
-  if (!SmsListener) {
-    console.warn('SmsListener native module not found.');
-    return;
+export const startSmsListener = () => {
+  // Avoid duplicate listeners if called multiple times
+  if (smsSubscription) {
+    smsSubscription.remove();
+    smsSubscription = null;
   }
 
-  const smsEmitter = new NativeEventEmitter(SmsListener);
-  
-  const handleSms = async (event: { body: string; sender: string }) => {
-    const { body, sender } = event;
-    
-    // DEBUG: Log that we saw ANY message
-    console.log(`Received SMS from ${sender}: ${body}`);
-    
-    if (shouldForwardSms(sender, body)) {
-      const result = await forwardToWebhook(settings.apiKey, settings.webhookUrl, body);
-      if (result.success) {
-        await addToLog({ smsText: body, status: 'success' });
-      } else {
-        await addToQueue(body);
-        await addToLog({ smsText: body, status: 'queued', error: result.error });
-      }
-    } else {
-      // Log skipped messages locally so the user knows the app is at least seeing them
-      await addToLog({ 
-        smsText: body, 
-        status: 'failed', 
-        error: 'Filtered out (No keywords/amount)' 
-      });
-    }
-  };
+  smsSubscription = SmsListener.addListener(
+    async (message: { body: string; originatingAddress: string }) => {
+      const { body, originatingAddress } = message;
 
-  smsEmitter.addListener('onSmsReceived', handleSms);
+      console.log(`[SpendWiser] SMS received from ${originatingAddress}: ${body}`);
+
+      // Read settings fresh each time — so the latest API key is always used
+      const settings = await getSettings();
+      if (!settings.apiKey || !settings.isListening) {
+        console.log('[SpendWiser] Listener inactive or no API key — skipping.');
+        return;
+      }
+
+      if (shouldForwardSms(originatingAddress, body)) {
+        const result = await forwardToWebhook(settings.apiKey, settings.webhookUrl, body);
+        if (result.success) {
+          await addToLog({ smsText: body, status: 'success' });
+          console.log('[SpendWiser] Forwarded successfully.');
+        } else {
+          await addToQueue(body);
+          await addToLog({ smsText: body, status: 'queued', error: result.error });
+          console.log(`[SpendWiser] Forward failed, queued. Error: ${result.error}`);
+        }
+      } else {
+        // Still log so the user can see the app is at least receiving SMS
+        await addToLog({
+          smsText: body,
+          status: 'failed',
+          error: 'Filtered out (no bank keywords/amount)',
+        });
+        console.log('[SpendWiser] SMS filtered out — not a bank transaction.');
+      }
+    }
+  );
+
+  console.log('[SpendWiser] SMS listener registered.');
+};
+
+export const stopSmsListener = () => {
+  if (smsSubscription) {
+    smsSubscription.remove();
+    smsSubscription = null;
+    console.log('[SpendWiser] SMS listener stopped.');
+  }
 };

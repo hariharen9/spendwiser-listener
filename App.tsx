@@ -27,11 +27,13 @@ import {
 import * as Notifications from 'expo-notifications';
 import { getSettings, saveSettings, getLog, addToLog, processQueue } from './src/services/api';
 import { AppSettings, ActivityLogEntry } from './src/types';
-import { startSmsListener, registerQueueTask } from './src/services/background';
+import { startSmsListener, stopSmsListener, registerQueueTask } from './src/services/background';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: false,
     shouldSetBadge: false,
   }),
@@ -101,12 +103,15 @@ export default function App() {
       return;
     }
     
-    const newSettings = { ...settings, isListening: !settings.isListening };
+    const newIsListening = !settings.isListening;
+    const newSettings = { ...settings, isListening: newIsListening };
     await saveSettings(newSettings);
     setSettings(newSettings);
     
-    if (newSettings.isListening) {
+    if (newIsListening) {
       startSmsListener();
+    } else {
+      stopSmsListener();
     }
   };
 
