@@ -34,9 +34,11 @@ jobs:
 
       - name: Build Android Release APK
         working-directory: ./android
+        # Add execution permissions to the gradlew script (fixes Linux compatibility when developed on Windows)
         # Your build.gradle is already configured to sign release builds using the debug keystore!
-        # This will output a perfectly installable app-release.apk
-        run: ./gradlew assembleRelease
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
