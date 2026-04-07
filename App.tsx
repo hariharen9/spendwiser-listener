@@ -13,6 +13,8 @@ import {
   Platform,
   Animated,
   Easing,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -29,6 +31,11 @@ import {
   Zap,
   Eye,
   EyeOff,
+  HelpCircle,
+  X,
+  Info,
+  Lock,
+  Server,
 } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
 import { getSettings, saveSettings, getLog, processQueue } from './src/services/api';
@@ -98,6 +105,7 @@ export default function App() {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -246,171 +254,271 @@ export default function App() {
       <SafeAreaView style={styles.container} edges={['top', 'right', 'left']}>
         <StatusBar barStyle="light-content" backgroundColor="#0B1120" translucent />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Radio size={20} color="#818CF8" />
-          <Text style={styles.headerTitle}>SpendWiser Listener</Text>
-        </View>
-        <Text style={styles.headerVersion}>v1.0.2</Text>
-      </View>
-
-      {/* Status Hero Card */}
-      <View style={styles.heroCard}>
-        <View style={styles.heroTop}>
-          <View style={styles.heroStatusRow}>
-            {settings.isListening && settings.apiKey ? (
-              <PulsingDot color="#34D399" />
-            ) : (
-              <StaticDot color={statusColor} />
-            )}
-            <Text style={[styles.heroStatusText, { color: statusColor }]}>{statusText}</Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Radio size={20} color="#818CF8" />
+            <Text style={styles.headerTitle}>SpendWiser Listener</Text>
           </View>
-          <TouchableOpacity
-            style={[
-              styles.heroToggle,
-              { backgroundColor: settings.isListening ? '#F8717118' : '#34D39918' },
-            ]}
-            onPress={toggleListening}
-            activeOpacity={0.7}
-          >
-            {settings.isListening ? (
-              <Square size={16} color="#F87171" fill="#F87171" />
-            ) : (
-              <Play size={16} color="#34D399" fill="#34D399" />
-            )}
-            <Text
-              style={[styles.heroToggleText, { color: settings.isListening ? '#F87171' : '#34D399' }]}
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={() => setShowHelp(true)}
+              style={styles.helpButton}
+              activeOpacity={0.7}
             >
-              {settings.isListening ? 'Stop' : 'Start'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Quick Stats Row */}
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Zap size={13} color="#818CF8" />
-            <Text style={styles.statValue}>{successCount}</Text>
-            <Text style={styles.statLabel}>Forwarded</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Clock size={13} color="#FBBF24" />
-            <Text style={styles.statValue}>{queuedCount}</Text>
-            <Text style={styles.statLabel}>Queued</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <ShieldCheck size={13} color="#34D399" />
-            <Text style={styles.statValue}>{log.length}</Text>
-            <Text style={styles.statLabel}>Total</Text>
+              <HelpCircle size={20} color="#818CF8" />
+            </TouchableOpacity>
+            <Text style={styles.headerVersion}>v1.0.3</Text>
           </View>
         </View>
-      </View>
 
-      {/* Collapsible Settings */}
-      <TouchableOpacity
-        style={styles.collapsibleHeader}
-        onPress={() => setShowSettings(!showSettings)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.collapsibleLeft}>
-          <Key size={16} color="#94A3B8" />
-          <Text style={styles.collapsibleTitle}>Settings</Text>
-          {settings.apiKey ? (
-            <View style={styles.keyBadge}>
-              <Text style={styles.keyBadgeText}>Key Active</Text>
+        {/* Status Hero Card */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroTop}>
+            <View style={styles.heroStatusRow}>
+              {settings.isListening && settings.apiKey ? (
+                <PulsingDot color="#34D399" />
+              ) : (
+                <StaticDot color={statusColor} />
+              )}
+              <Text style={[styles.heroStatusText, { color: statusColor }]}>{statusText}</Text>
             </View>
-          ) : (
-            <View style={[styles.keyBadge, { backgroundColor: '#FBBF2420' }]}>
-              <Text style={[styles.keyBadgeText, { color: '#FBBF24' }]}>No Key</Text>
-            </View>
-          )}
-        </View>
-        {showSettings ? (
-          <ChevronUp size={18} color="#64748B" />
-        ) : (
-          <ChevronDown size={18} color="#64748B" />
-        )}
-      </TouchableOpacity>
-
-      {showSettings && (
-        <View style={styles.settingsPanel}>
-          <Text style={styles.settingsLabel}>API Key</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.input}
-              placeholder="Paste your API key from SpendWiser…"
-              placeholderTextColor="#475569"
-              value={apiKeyInput}
-              onChangeText={setApiKeyInput}
-              secureTextEntry={!showApiKey && apiKeyInput.length > 0}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {apiKeyInput.length > 0 && (
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowApiKey(!showApiKey)}
+            <TouchableOpacity
+              style={[
+                styles.heroToggle,
+                { backgroundColor: settings.isListening ? '#F8717118' : '#34D39918' },
+              ]}
+              onPress={toggleListening}
+              activeOpacity={0.7}
+            >
+              {settings.isListening ? (
+                <Square size={16} color="#F87171" fill="#F87171" />
+              ) : (
+                <Play size={16} color="#34D399" fill="#34D399" />
+              )}
+              <Text
+                style={[styles.heroToggleText, { color: settings.isListening ? '#F87171' : '#34D399' }]}
               >
-                {showApiKey ? (
-                  <EyeOff size={18} color="#64748B" />
-                ) : (
-                  <Eye size={18} color="#64748B" />
-                )}
-              </TouchableOpacity>
+                {settings.isListening ? 'Stop' : 'Start'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick Stats Row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Zap size={13} color="#818CF8" />
+              <Text style={styles.statValue}>{successCount}</Text>
+              <Text style={styles.statLabel}>Forwarded</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Clock size={13} color="#FBBF24" />
+              <Text style={styles.statValue}>{queuedCount}</Text>
+              <Text style={styles.statLabel}>Queued</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <ShieldCheck size={13} color="#34D399" />
+              <Text style={styles.statValue}>{log.length}</Text>
+              <Text style={styles.statLabel}>Total</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Collapsible Settings */}
+        <TouchableOpacity
+          style={styles.collapsibleHeader}
+          onPress={() => setShowSettings(!showSettings)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.collapsibleLeft}>
+            <Key size={16} color="#94A3B8" />
+            <Text style={styles.collapsibleTitle}>Settings</Text>
+            {settings.apiKey ? (
+              <View style={styles.keyBadge}>
+                <Text style={styles.keyBadgeText}>Key Active</Text>
+              </View>
+            ) : (
+              <View style={[styles.keyBadge, { backgroundColor: '#FBBF2420' }]}>
+                <Text style={[styles.keyBadgeText, { color: '#FBBF24' }]}>No Key</Text>
+              </View>
             )}
           </View>
-          {settings.apiKey ? (
-            <View style={styles.savedKeyRow}>
-              <Text style={styles.savedKeyLabel}>Current: </Text>
-              <Text style={styles.savedKeyValue}>{maskApiKey(settings.apiKey)}</Text>
-            </View>
-          ) : null}
-          <TouchableOpacity style={styles.saveButton} onPress={handleSaveApiKey} activeOpacity={0.8}>
-            <Text style={styles.saveButtonText}>Save Key</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+          {showSettings ? (
+            <ChevronUp size={18} color="#64748B" />
+          ) : (
+            <ChevronDown size={18} color="#64748B" />
+          )}
+        </TouchableOpacity>
 
-      {/* Activity Log */}
-      <View style={styles.logSection}>
-        <View style={styles.logHeader}>
-          <Text style={styles.logTitle}>Activity Log</Text>
-          <TouchableOpacity
-            onPress={handleRefresh}
-            disabled={refreshing}
-            style={styles.refreshButton}
-            activeOpacity={0.6}
-          >
-            {refreshing ? (
-              <ActivityIndicator size="small" color="#818CF8" />
-            ) : (
-              <RefreshCw size={16} color="#818CF8" />
-            )}
-          </TouchableOpacity>
+        {showSettings && (
+          <View style={styles.settingsPanel}>
+            <Text style={styles.settingsLabel}>API Key</Text>
+            <View style={styles.inputRow}>
+              <TextInput
+                style={styles.input}
+                placeholder="Paste your API key from SpendWiser…"
+                placeholderTextColor="#475569"
+                value={apiKeyInput}
+                onChangeText={setApiKeyInput}
+                secureTextEntry={!showApiKey && apiKeyInput.length > 0}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {apiKeyInput.length > 0 && (
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowApiKey(!showApiKey)}
+                >
+                  {showApiKey ? (
+                    <EyeOff size={18} color="#64748B" />
+                  ) : (
+                    <Eye size={18} color="#64748B" />
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+            {settings.apiKey ? (
+              <View style={styles.savedKeyRow}>
+                <Text style={styles.savedKeyLabel}>Current: </Text>
+                <Text style={styles.savedKeyValue}>{maskApiKey(settings.apiKey)}</Text>
+              </View>
+            ) : null}
+            <TouchableOpacity style={styles.saveButton} onPress={handleSaveApiKey} activeOpacity={0.8}>
+              <Text style={styles.saveButtonText}>Save Key</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Activity Log */}
+        <View style={styles.logSection}>
+          <View style={styles.logHeader}>
+            <View>
+              <Text style={styles.logTitle}>Activity Log</Text>
+              <Text style={styles.logSubtitle}>Tap refresh to see latest background events</Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleRefresh}
+              disabled={refreshing}
+              style={styles.refreshButton}
+              activeOpacity={0.6}
+            >
+              {refreshing ? (
+                <ActivityIndicator size="small" color="#818CF8" />
+              ) : (
+                <RefreshCw size={16} color="#818CF8" />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <FlatList
+            data={log}
+            keyExtractor={(item) => item.id}
+            renderItem={renderLogEntry}
+            contentContainerStyle={log.length === 0 ? styles.emptyListContainer : styles.logList}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Radio size={40} color="#1E293B" />
+                <Text style={styles.emptyTitle}>No activity yet</Text>
+                <Text style={styles.emptySubtitle}>
+                  {settings.isListening
+                    ? 'Waiting for bank SMS…'
+                    : 'Start listening to capture transactions'}
+                </Text>
+              </View>
+            }
+            showsVerticalScrollIndicator={false}
+          />
         </View>
 
-        <FlatList
-          data={log}
-          keyExtractor={(item) => item.id}
-          renderItem={renderLogEntry}
-          contentContainerStyle={log.length === 0 ? styles.emptyListContainer : styles.logList}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Radio size={40} color="#1E293B" />
-              <Text style={styles.emptyTitle}>No activity yet</Text>
-              <Text style={styles.emptySubtitle}>
-                {settings.isListening
-                  ? 'Waiting for bank SMS…'
-                  : 'Start listening to capture transactions'}
-              </Text>
-            </View>
-          }
-          showsVerticalScrollIndicator={false}
-        />
-      </View>
+        {/* Help Modal */}
+        <Modal
+          visible={showHelp}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowHelp(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <SafeAreaView style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <View style={styles.modalHeaderTitleRow}>
+                  <HelpCircle size={22} color="#818CF8" />
+                  <Text style={styles.modalTitle}>How it works</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowHelp(false)} style={styles.closeButton}>
+                  <X size={24} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                <View style={styles.helpSection}>
+                  <View style={styles.helpIconContainer}>
+                    <Eye size={24} color="#818CF8" />
+                  </View>
+                  <View style={styles.helpTextContainer}>
+                    <Text style={styles.helpHeading}>Full SMS Visibility</Text>
+                    <Text style={styles.helpDescription}>
+                      To detect transactions, Android requires permissions to see all incoming SMS.
+                      The app "listens" for new messages the moment they arrive.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.helpSection}>
+                  <View style={styles.helpIconContainer}>
+                    <Lock size={24} color="#34D399" />
+                  </View>
+                  <View style={styles.helpTextContainer}>
+                    <Text style={styles.helpHeading}>100% Local Filtering</Text>
+                    <Text style={styles.helpDescription}>
+                      Processing happens entirely on your device. All non-bank messages are
+                      instantly ignored and deleted from the app's memory. We never store or read
+                      your personal conversations.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.helpSection}>
+                  <View style={styles.helpIconContainer}>
+                    <Server size={24} color="#6366F1" />
+                  </View>
+                  <View style={styles.helpTextContainer}>
+                    <Text style={styles.helpHeading}>Secure Forwarding</Text>
+                    <Text style={styles.helpDescription}>
+                      Only identified bank transactions (e.g., "Rs. 500 debited...") are securely
+                      forwarded to your SpendWiser account using your private API key.
+                      Nothing else ever leaves your device.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.helpSection}>
+                  <View style={styles.helpIconContainer}>
+                    <RefreshCw size={24} color="#FBBF24" />
+                  </View>
+                  <View style={styles.helpTextContainer}>
+                    <Text style={styles.helpHeading}>Background Activity</Text>
+                    <Text style={styles.helpDescription}>
+                      The app runs as a system service. Background events won't always
+                      refresh this UI automatically to save battery. Use the refresh button
+                      on the Activity Log to see the latest status.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.privacyNote}>
+                  <ShieldCheck size={18} color="#34D399" />
+                  <Text style={styles.privacyNoteText}>
+                    Transparent, open-source, and privacy-focused.
+                  </Text>
+                </View>
+
+                <View style={{ height: 40 }} />
+              </ScrollView>
+            </SafeAreaView>
+          </View>
+        </Modal>
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -446,6 +554,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   headerTitle: {
     fontSize: 17,
     fontWeight: '700',
@@ -456,6 +569,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#475569',
     fontWeight: '500',
+  },
+  helpButton: {
+    padding: 4,
   },
 
   // Hero Card
@@ -652,6 +768,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
   },
+  logSubtitle: {
+    color: '#475569',
+    fontSize: 11,
+    marginTop: 2,
+    fontWeight: '500',
+  },
   refreshButton: {
     padding: 6,
     borderRadius: 8,
@@ -721,5 +843,88 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 220,
     lineHeight: 18,
+  },
+
+  // Modal Help Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#0B1120',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: '80%',
+    paddingTop: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+  },
+  modalHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#F1F5F9',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalBody: {
+    padding: 24,
+  },
+  helpSection: {
+    flexDirection: 'row',
+    marginBottom: 28,
+    gap: 18,
+  },
+  helpIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#111827',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  helpTextContainer: {
+    flex: 1,
+  },
+  helpHeading: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#CBD5E1',
+    marginBottom: 4,
+  },
+  helpDescription: {
+    fontSize: 14,
+    color: '#64748B',
+    lineHeight: 20,
+  },
+  privacyNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#34D39910',
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 10,
+  },
+  privacyNoteText: {
+    color: '#34D399',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
