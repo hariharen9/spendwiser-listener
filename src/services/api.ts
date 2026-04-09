@@ -67,7 +67,7 @@ export const addToLog = async (entry: Omit<ActivityLogEntry, 'id' | 'timestamp' 
 export const forwardToWebhook = async (apiKey: string, webhookUrl: string, smsText: string): Promise<{ success: boolean; error?: string }> => {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(webhookUrl, {
       method: 'POST',

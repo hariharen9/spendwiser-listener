@@ -38,7 +38,8 @@ import {
   Filter,
   WifiOff,
   Activity,
-  ShieldAlert,
+  CheckCircle2,
+  Server,
 } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
 import { getSettings, saveSettings, getLog, processQueue } from './src/services/api';
@@ -109,6 +110,21 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const edgeGlowOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (settings?.isListening && settings?.apiKey) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(edgeGlowOpacity, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(edgeGlowOpacity, { toValue: 0, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      edgeGlowOpacity.stopAnimation();
+      edgeGlowOpacity.setValue(0);
+    }
+  }, [settings?.isListening, settings?.apiKey, edgeGlowOpacity]);
 
   useEffect(() => {
     loadData();
@@ -245,7 +261,8 @@ export default function App() {
 
     let displaySummary = item.summary;
     if (isFiltered) {
-      const flatText = item.smsText.replace(/\n/g, ' ').trim();
+      const rawText = item.smsText || item.summary || '';
+      const flatText = rawText.replace(/\n/g, ' ').trim();
       displaySummary = `💬 "${flatText.length > 40 ? flatText.substring(0, 40) + '...' : flatText}"`;
     }
 
@@ -256,11 +273,13 @@ export default function App() {
             <Icon size={14} color={iconColor} />
           </View>
           <Text style={styles.logSummary} numberOfLines={1}>{displaySummary}</Text>
-          <Text style={styles.logTimeAgo}>{getTimeAgo(item.timestamp)}</Text>
+          <Text style={[styles.logTimeAgo, refreshing && isQueued && { color: '#FBBF24', fontStyle: 'italic', fontWeight: '700' }]}>
+            {(refreshing && isQueued) ? 'Syncing...' : getTimeAgo(item.timestamp)}
+          </Text>
         </View>
-        {item.error && (
+        {!!item.error && (
           <Text style={[styles.logError, isFiltered && { color: '#94A3B8' }]} numberOfLines={1}>
-            {!isFiltered && '⚠ '}{isFiltered ? 'Filtered out (no bank keywords)' : item.error}
+            {isFiltered ? 'Filtered out (no bank keywords)' : `⚠ ${item.error}`}
           </Text>
         )}
       </View>
@@ -291,7 +310,9 @@ export default function App() {
         </View>
 
         {/* Status Hero Card */}
-        <View style={[styles.heroCard, settings.isListening && settings.apiKey && { borderColor: '#34D39940', backgroundColor: '#064e3b15', elevation: 8, shadowColor: '#34D399' }]}>
+        <View style={styles.heroCardContainer}>
+          <Animated.View style={[styles.heroCardGlow, { opacity: edgeGlowOpacity }]} />
+          <View style={[styles.heroCard, settings.isListening && settings.apiKey && { backgroundColor: '#064e3b15' }]}>
           <View style={styles.heroTop}>
             <View style={styles.heroStatusRow}>
               {settings.isListening && settings.apiKey ? (
@@ -377,6 +398,7 @@ export default function App() {
             </View>
           </View>
         </View>
+      </View>
 
         {/* Collapsible Settings */}
         <TouchableOpacity
@@ -458,7 +480,10 @@ export default function App() {
             >
               <View style={styles.refreshPill}>
                 {refreshing ? (
-                  <ActivityIndicator size="small" color="#818CF8" />
+                  <>
+                    <ActivityIndicator size="small" color="#818CF8" />
+                    <Text style={[styles.refreshPillText, { marginLeft: 4 }]}>Syncing</Text>
+                  </>
                 ) : (
                   <>
                     <RefreshCw size={14} color="#818CF8" />
@@ -632,8 +657,18 @@ const styles = StyleSheet.create({
   },
 
   // Hero Card
-  heroCard: {
+  heroCardContainer: {
     marginHorizontal: 16,
+    position: 'relative',
+  },
+  heroCardGlow: {
+    position: 'absolute',
+    top: -2, bottom: -2, left: -2, right: -2,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#34D399',
+  },
+  heroCard: {
     backgroundColor: '#111827',
     borderRadius: 16,
     padding: 18,
@@ -687,14 +722,14 @@ const styles = StyleSheet.create({
   },
   statValueLarge: {
     color: '#F1F5F9',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
     letterSpacing: 0.2,
   },
   statLabelMuted: {
     color: '#64748B',
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 9,
+    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
