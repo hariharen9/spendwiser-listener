@@ -35,10 +35,10 @@ import {
   X,
   Info,
   Lock,
-  Server,
-  CheckCircle2,
   Filter,
   WifiOff,
+  Activity,
+  ShieldAlert,
 } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
 import { getSettings, saveSettings, getLog, processQueue } from './src/services/api';
@@ -230,13 +230,17 @@ export default function App() {
   const successCount = log.filter(e => e.status === 'success').length;
   const queuedCount = log.filter(e => e.status === 'queued').length;
   const filteredCount = log.filter(e => e.status === 'failed' && e.error?.includes('Filtered')).length;
+  const errorCount = log.filter(e => e.status === 'failed' && !e.error?.includes('Filtered')).length;
+  const validTrans = successCount + queuedCount + errorCount;
+  const successRate = validTrans > 0 ? Math.round((successCount / validTrans) * 100) : '--';
 
   const renderLogEntry = ({ item }: { item: ActivityLogEntry }) => {
     const isSuccess = item.status === 'success';
     const isQueued = item.status === 'queued';
     const isFiltered = item.status === 'failed' && item.error?.includes('Filtered');
     
-    const iconColor = isSuccess ? '#34D399' : isQueued ? '#FBBF24' : '#64748B';
+    // Proper coloring for actual errors vs filtered vs success
+    const iconColor = isSuccess ? '#34D399' : isQueued ? '#FBBF24' : isFiltered ? '#64748B' : '#F87171';
     const Icon = isSuccess ? CheckCircle2 : isQueued ? WifiOff : isFiltered ? Filter : ShieldAlert;
 
     let displaySummary = item.summary;
@@ -246,7 +250,7 @@ export default function App() {
     }
 
     return (
-      <View style={styles.logEntry}>
+      <View style={[styles.logEntry, { borderLeftColor: iconColor, borderLeftWidth: 4 }]}>
         <View style={styles.logTopRow}>
           <View style={[styles.logIconBadge, { backgroundColor: `${iconColor}18` }]}>
             <Icon size={14} color={iconColor} />
@@ -255,7 +259,9 @@ export default function App() {
           <Text style={styles.logTimeAgo}>{getTimeAgo(item.timestamp)}</Text>
         </View>
         {item.error && (
-          <Text style={styles.logError} numberOfLines={1}>⚠ {item.error}</Text>
+          <Text style={[styles.logError, isFiltered && { color: '#94A3B8' }]} numberOfLines={1}>
+            {!isFiltered && '⚠ '}{isFiltered ? 'Filtered out (no bank keywords)' : item.error}
+          </Text>
         )}
       </View>
     );
@@ -285,7 +291,7 @@ export default function App() {
         </View>
 
         {/* Status Hero Card */}
-        <View style={styles.heroCard}>
+        <View style={[styles.heroCard, settings.isListening && settings.apiKey && { borderColor: '#34D39940', backgroundColor: '#064e3b15', elevation: 8, shadowColor: '#34D399' }]}>
           <View style={styles.heroTop}>
             <View style={styles.heroStatusRow}>
               {settings.isListening && settings.apiKey ? (
@@ -316,30 +322,58 @@ export default function App() {
             </TouchableOpacity>
           </View>
 
-          {/* Quick Stats Row */}
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <CheckCircle2 size={13} color="#34D399" />
-              <Text style={styles.statValue}>{successCount}</Text>
-              <Text style={styles.statLabel}>Forwarded</Text>
+          {/* 3x2 Quick Stats Grid */}
+          <View style={styles.statsGrid}>
+            {/* Row 1 */}
+            <View style={styles.statsGridRow}>
+              <View style={styles.statItemGrid}>
+                <CheckCircle2 size={15} color="#34D399" />
+                <View>
+                  <Text style={styles.statValueLarge}>{successCount}</Text>
+                  <Text style={styles.statLabelMuted}>Forwarded</Text>
+                </View>
+              </View>
+              <View style={styles.statItemGrid}>
+                <WifiOff size={15} color="#FBBF24" />
+                <View>
+                  <Text style={styles.statValueLarge}>{queuedCount}</Text>
+                  <Text style={styles.statLabelMuted}>Queued</Text>
+                </View>
+              </View>
+              <View style={styles.statItemGrid}>
+                <ShieldAlert size={15} color="#F87171" />
+                <View>
+                  <Text style={styles.statValueLarge}>{errorCount}</Text>
+                  <Text style={styles.statLabelMuted}>Dropped</Text>
+                </View>
+              </View>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Filter size={13} color="#64748B" />
-              <Text style={styles.statValue}>{filteredCount}</Text>
-              <Text style={styles.statLabel}>Filtered</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <WifiOff size={13} color="#FBBF24" />
-              <Text style={styles.statValue}>{queuedCount}</Text>
-              <Text style={styles.statLabel}>Queued</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Zap size={13} color="#818CF8" />
-              <Text style={styles.statValue}>{log.length}</Text>
-              <Text style={styles.statLabel}>Total</Text>
+
+            <View style={styles.statHorizontalDivider} />
+
+            {/* Row 2 */}
+            <View style={styles.statsGridRow}>
+              <View style={styles.statItemGrid}>
+                <Filter size={15} color="#64748B" />
+                <View>
+                  <Text style={styles.statValueLarge}>{filteredCount}</Text>
+                  <Text style={styles.statLabelMuted}>Filtered</Text>
+                </View>
+              </View>
+              <View style={styles.statItemGrid}>
+                <Activity size={15} color="#38BDF8" />
+                <View>
+                  <Text style={styles.statValueLarge}>{successRate}{successRate === '--' ? '' : '%'}</Text>
+                  <Text style={styles.statLabelMuted}>Success Rate</Text>
+                </View>
+              </View>
+              <View style={styles.statItemGrid}>
+                <Zap size={15} color="#C084FC" />
+                <View>
+                  <Text style={styles.statValueLarge}>{log.length}</Text>
+                  <Text style={styles.statLabelMuted}>Total</Text>
+                </View>
+              </View>
             </View>
           </View>
         </View>
@@ -422,11 +456,16 @@ export default function App() {
               style={styles.refreshButton}
               activeOpacity={0.6}
             >
-              {refreshing ? (
-                <ActivityIndicator size="small" color="#818CF8" />
-              ) : (
-                <RefreshCw size={16} color="#818CF8" />
-              )}
+              <View style={styles.refreshPill}>
+                {refreshing ? (
+                  <ActivityIndicator size="small" color="#818CF8" />
+                ) : (
+                  <>
+                    <RefreshCw size={14} color="#818CF8" />
+                    <Text style={styles.refreshPillText}>Refresh</Text>
+                  </>
+                )}
+              </View>
             </TouchableOpacity>
           </View>
 
@@ -629,33 +668,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
-  statsRow: {
+  statsGrid: {
+    backgroundColor: '#0B1120aa',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+  },
+  statsGridRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 6,
+  },
+  statItemGrid: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    backgroundColor: '#0B112080',
-    borderRadius: 10,
-    paddingVertical: 12,
+    gap: 8,
+    flex: 1,
   },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  statValue: {
+  statValueLarge: {
     color: '#F1F5F9',
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
-  statLabel: {
+  statLabelMuted: {
     color: '#64748B',
-    fontSize: 11,
-    fontWeight: '500',
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  statDivider: {
-    width: 1,
-    height: 18,
+  statHorizontalDivider: {
+    height: 1,
     backgroundColor: '#1E293B',
+    marginVertical: 14,
   },
 
   // Collapsible Settings
@@ -793,9 +839,23 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   refreshButton: {
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: '#818CF810',
+    borderRadius: 12,
+  },
+  refreshPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: '#818CF815',
+    borderWidth: 1,
+    borderColor: '#818CF830',
+  },
+  refreshPillText: {
+    color: '#818CF8',
+    fontSize: 12,
+    fontWeight: '700',
   },
   logList: {
     paddingBottom: 30,
