@@ -36,6 +36,9 @@ import {
   Info,
   Lock,
   Server,
+  CheckCircle2,
+  Filter,
+  WifiOff,
 } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
 import { getSettings, saveSettings, getLog, processQueue } from './src/services/api';
@@ -226,12 +229,21 @@ export default function App() {
   const statusText = !settings.apiKey ? 'No API Key' : settings.isListening ? 'Listening' : 'Stopped';
   const successCount = log.filter(e => e.status === 'success').length;
   const queuedCount = log.filter(e => e.status === 'queued').length;
+  const filteredCount = log.filter(e => e.status === 'failed' && e.error?.includes('Filtered')).length;
 
   const renderLogEntry = ({ item }: { item: ActivityLogEntry }) => {
     const isSuccess = item.status === 'success';
     const isQueued = item.status === 'queued';
+    const isFiltered = item.status === 'failed' && item.error?.includes('Filtered');
+    
     const iconColor = isSuccess ? '#34D399' : isQueued ? '#FBBF24' : '#64748B';
-    const Icon = isSuccess ? ShieldCheck : isQueued ? RefreshCw : ShieldAlert;
+    const Icon = isSuccess ? CheckCircle2 : isQueued ? WifiOff : isFiltered ? Filter : ShieldAlert;
+
+    let displaySummary = item.summary;
+    if (isFiltered) {
+      const flatText = item.smsText.replace(/\n/g, ' ').trim();
+      displaySummary = `💬 "${flatText.length > 40 ? flatText.substring(0, 40) + '...' : flatText}"`;
+    }
 
     return (
       <View style={styles.logEntry}>
@@ -239,7 +251,7 @@ export default function App() {
           <View style={[styles.logIconBadge, { backgroundColor: `${iconColor}18` }]}>
             <Icon size={14} color={iconColor} />
           </View>
-          <Text style={styles.logSummary} numberOfLines={1}>{item.summary}</Text>
+          <Text style={styles.logSummary} numberOfLines={1}>{displaySummary}</Text>
           <Text style={styles.logTimeAgo}>{getTimeAgo(item.timestamp)}</Text>
         </View>
         {item.error && (
@@ -307,19 +319,25 @@ export default function App() {
           {/* Quick Stats Row */}
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Zap size={13} color="#818CF8" />
+              <CheckCircle2 size={13} color="#34D399" />
               <Text style={styles.statValue}>{successCount}</Text>
               <Text style={styles.statLabel}>Forwarded</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Clock size={13} color="#FBBF24" />
+              <Filter size={13} color="#64748B" />
+              <Text style={styles.statValue}>{filteredCount}</Text>
+              <Text style={styles.statLabel}>Filtered</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <WifiOff size={13} color="#FBBF24" />
               <Text style={styles.statValue}>{queuedCount}</Text>
               <Text style={styles.statLabel}>Queued</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <ShieldCheck size={13} color="#34D399" />
+              <Zap size={13} color="#818CF8" />
               <Text style={styles.statValue}>{log.length}</Text>
               <Text style={styles.statLabel}>Total</Text>
             </View>
