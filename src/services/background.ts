@@ -39,13 +39,14 @@ export const headlessSmsHandler = async (taskData: { originatingAddress: string,
   }
 
   if (shouldForwardSms(originatingAddress, messageBody)) {
+    const messageId = Math.random().toString(36).substring(7);
     const result = await forwardToWebhook(settings.apiKey, settings.webhookUrl, messageBody);
     if (result.success) {
-      await addToLog({ smsText: messageBody, status: 'success' });
+      await addToLog({ id: messageId, smsText: messageBody, status: 'success' });
       console.log('[SpendWiser Headless] Forwarded successfully.');
     } else {
-      await addToQueue(messageBody);
-      await addToLog({ smsText: messageBody, status: 'queued', error: result.error });
+      await addToQueue(messageId, messageBody);
+      await addToLog({ id: messageId, smsText: messageBody, status: 'queued', error: result.error });
       console.log(`[SpendWiser Headless] Forward failed, queued. Error: ${result.error}`);
     }
   } else {

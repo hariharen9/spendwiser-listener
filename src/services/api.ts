@@ -31,10 +31,10 @@ export const saveQueue = async (queue: QueuedSms[]): Promise<void> => {
   await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
 };
 
-export const addToQueue = async (smsText: string): Promise<void> => {
+export const addToQueue = async (id: string, smsText: string): Promise<void> => {
   const queue = await getQueue();
   queue.push({
-    id: Math.random().toString(36).substring(7),
+    id,
     smsText,
     timestamp: new Date().toISOString(),
     retryCount: 0,
@@ -53,15 +53,29 @@ export const saveLog = async (log: ActivityLogEntry[]): Promise<void> => {
   await AsyncStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(trimmed));
 };
 
-export const addToLog = async (entry: Omit<ActivityLogEntry, 'id' | 'timestamp' | 'summary'>): Promise<void> => {
+export const addToLog = async (entry: Omit<ActivityLogEntry, 'id' | 'timestamp' | 'summary'> & { id?: string }): Promise<void> => {
   const log = await getLog();
+  const id = entry.id || Math.random().toString(36).substring(7);
   log.unshift({
     ...entry,
-    id: Math.random().toString(36).substring(7),
+    id,
     timestamp: new Date().toISOString(),
     summary: extractSummary(entry.smsText),
   });
   await saveLog(log);
+};
+
+export const updateLogEntryStatus = async (id: string, status: 'success' | 'failed' | 'queued', error?: string): Promise<void> => {
+  const log = await getLog();
+  const entryIndex = log.findIndex((e) => e.id === id);
+  if (entryIndex !== -1) {
+    log[entryIndex].status = status;
+    if (error !== undefined) {
+      log[entryIndex].error = error;
+    }
+    log[entryIndex].timestamp = new Date().toISOString(); 
+    await saveLog(log);
+  }
 };
 
 export const forwardToWebhook = async (apiKey: string, webhookUrl: string, smsText: string): Promise<{ success: boolean; error?: string }> => {
@@ -101,21 +115,15 @@ export const processQueue = async (apiKey: string, webhookUrl: string): Promise<
   const newQueue: QueuedSms[] = [];
   for (const item of queue) {
     if (item.retryCount >= 5) {
-      await addToLog({
-        smsText: item.smsText,
-        status: 'failed',
-        error: 'Max retries reached',
-      });
+      await updateLogEntryStatus(item.id, 'failed', 'Max retries reached');
       continue;
     }
 
     const result = await forwardToWebhook(apiKey, webhookUrl, item.smsText);
     if (result.success) {
-      await addToLog({
-        smsText: item.smsText,
-        status: 'success',
-      });
+      await updateLogEntryStatus(item.id, 'success');
     } else {
+      await updateLogEntryStatus(item.id, 'queued', result.error);
       newQueue.push({
         ...item,
         retryCount: item.retryCount + 1,
