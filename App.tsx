@@ -305,7 +305,7 @@ export default function App() {
             >
               <HelpCircle size={20} color="#818CF8" />
             </TouchableOpacity>
-            <Text style={styles.headerVersion}>v1.1.0</Text>
+            <Text style={styles.headerVersion}>v1.2.0</Text>
           </View>
         </View>
 
