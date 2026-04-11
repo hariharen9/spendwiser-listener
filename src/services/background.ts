@@ -19,7 +19,7 @@ TaskManager.defineTask(QUEUE_TASK, async () => {
 
 export const registerQueueTask = async () => {
   return BackgroundFetch.registerTaskAsync(QUEUE_TASK, {
-    minimumInterval: 15 * 60, // 15 minutes
+    minimumInterval: 60, // 1 minute — OS will throttle to its own minimum, but we signal intent for fastest cadence
     stopOnTerminate: false,
     startOnBoot: true,
   });

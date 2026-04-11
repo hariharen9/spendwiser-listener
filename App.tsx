@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -15,6 +15,7 @@ import {
   Easing,
   Modal,
   ScrollView,
+  AppState,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -111,6 +112,14 @@ export default function App() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const edgeGlowOpacity = useRef(new Animated.Value(0)).current;
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const appStateRef = useRef(AppState.currentState);
+  const settingsRef = useRef<AppSettings | null>(null);
+
+  // Keep settingsRef in sync so callbacks can access latest settings without re-creating
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
   useEffect(() => {
     if (settings?.isListening && settings?.apiKey) {
@@ -125,6 +134,46 @@ export default function App() {
       edgeGlowOpacity.setValue(0);
     }
   }, [settings?.isListening, settings?.apiKey, edgeGlowOpacity]);
+
+  // Lightweight log refresh — just reads AsyncStorage, no network calls
+  const refreshLogOnly = useCallback(async () => {
+    try {
+      const l = await getLog();
+      setLog(l);
+    } catch (e) {
+      console.warn('[SpendWiser] Log poll failed:', e);
+    }
+  }, []);
+
+  // ── Foreground Polling (every 8s, AsyncStorage-only — near-zero battery cost) ──
+  useEffect(() => {
+    if (!loading) {
+      pollIntervalRef.current = setInterval(refreshLogOnly, 8000);
+    }
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, [loading, refreshLogOnly]);
+
+  // ── AppState Listener — refresh log + flush queue when app comes to foreground ──
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        // App just came to foreground — immediately refresh the log
+        refreshLogOnly();
+        // Process any queued messages in the background (non-blocking)
+        const s = settingsRef.current;
+        if (s?.apiKey && s?.isListening) {
+          processQueue(s.apiKey, s.webhookUrl).then(refreshLogOnly).catch(console.error);
+        }
+      }
+      appStateRef.current = nextAppState;
+    });
+    return () => subscription.remove();
+  }, [refreshLogOnly]);
 
   useEffect(() => {
     loadData();
@@ -208,12 +257,22 @@ export default function App() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    if (settings?.apiKey) {
-      await processQueue(settings.apiKey, settings.webhookUrl);
-    }
+    // 1. Show latest log IMMEDIATELY (zero network wait)
     const l = await getLog();
     setLog(l);
-    setRefreshing(false);
+    // 2. Process queue in the background (non-blocking)
+    if (settings?.apiKey) {
+      processQueue(settings.apiKey, settings.webhookUrl)
+        .then(async () => {
+          // Refresh log again after queue flush completes
+          const updated = await getLog();
+          setLog(updated);
+        })
+        .catch(console.error)
+        .finally(() => setRefreshing(false));
+    } else {
+      setRefreshing(false);
+    }
   };
 
   const maskApiKey = (key: string) => {
