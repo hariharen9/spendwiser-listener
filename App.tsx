@@ -313,7 +313,7 @@ export default function App() {
     const isSuccess = item.status === 'success';
     const isQueued = item.status === 'queued';
     const isFiltered = item.status === 'failed' && item.error?.includes('Filtered');
-    
+
     // Proper coloring for actual errors vs filtered vs success
     const iconColor = isSuccess ? '#34D399' : isQueued ? '#FBBF24' : isFiltered ? '#64748B' : '#F87171';
     const Icon = isSuccess ? CheckCircle2 : isQueued ? WifiOff : isFiltered ? Filter : ShieldAlert;
@@ -364,7 +364,7 @@ export default function App() {
             >
               <HelpCircle size={20} color="#818CF8" />
             </TouchableOpacity>
-            <Text style={styles.headerVersion}>v1.2.0</Text>
+            <Text style={styles.headerVersion}>v1.2.1</Text>
           </View>
         </View>
 
@@ -372,92 +372,92 @@ export default function App() {
         <View style={styles.heroCardContainer}>
           <Animated.View style={[styles.heroCardGlow, { opacity: edgeGlowOpacity }]} />
           <View style={[styles.heroCard, settings.isListening && settings.apiKey && { backgroundColor: '#064e3b15' }]}>
-          <View style={styles.heroTop}>
-            <View style={styles.heroStatusRow}>
-              {settings.isListening && settings.apiKey ? (
-                <PulsingDot color="#34D399" />
-              ) : (
-                <StaticDot color={statusColor} />
-              )}
-              <Text style={[styles.heroStatusText, { color: statusColor }]}>{statusText}</Text>
-            </View>
-            <TouchableOpacity
-              style={[
-                styles.heroToggle,
-                { backgroundColor: settings.isListening ? '#F8717118' : '#34D39918' },
-              ]}
-              onPress={toggleListening}
-              activeOpacity={0.7}
-            >
-              {settings.isListening ? (
-                <Square size={16} color="#F87171" fill="#F87171" />
-              ) : (
-                <Play size={16} color="#34D399" fill="#34D399" />
-              )}
-              <Text
-                style={[styles.heroToggleText, { color: settings.isListening ? '#F87171' : '#34D399' }]}
+            <View style={styles.heroTop}>
+              <View style={styles.heroStatusRow}>
+                {settings.isListening && settings.apiKey ? (
+                  <PulsingDot color="#34D399" />
+                ) : (
+                  <StaticDot color={statusColor} />
+                )}
+                <Text style={[styles.heroStatusText, { color: statusColor }]}>{statusText}</Text>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.heroToggle,
+                  { backgroundColor: settings.isListening ? '#F8717118' : '#34D39918' },
+                ]}
+                onPress={toggleListening}
+                activeOpacity={0.7}
               >
-                {settings.isListening ? 'Stop' : 'Start'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* 3x2 Quick Stats Grid */}
-          <View style={styles.statsGrid}>
-            {/* Row 1 */}
-            <View style={styles.statsGridRow}>
-              <View style={styles.statItemGrid}>
-                <CheckCircle2 size={15} color="#34D399" />
-                <View>
-                  <Text style={styles.statValueLarge}>{successCount}</Text>
-                  <Text style={styles.statLabelMuted}>Forwarded</Text>
-                </View>
-              </View>
-              <View style={styles.statItemGrid}>
-                <WifiOff size={15} color="#FBBF24" />
-                <View>
-                  <Text style={styles.statValueLarge}>{queuedCount}</Text>
-                  <Text style={styles.statLabelMuted}>Queued</Text>
-                </View>
-              </View>
-              <View style={styles.statItemGrid}>
-                <ShieldAlert size={15} color="#F87171" />
-                <View>
-                  <Text style={styles.statValueLarge}>{errorCount}</Text>
-                  <Text style={styles.statLabelMuted}>Dropped</Text>
-                </View>
-              </View>
+                {settings.isListening ? (
+                  <Square size={16} color="#F87171" fill="#F87171" />
+                ) : (
+                  <Play size={16} color="#34D399" fill="#34D399" />
+                )}
+                <Text
+                  style={[styles.heroToggleText, { color: settings.isListening ? '#F87171' : '#34D399' }]}
+                >
+                  {settings.isListening ? 'Stop' : 'Start'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.statHorizontalDivider} />
+            {/* 3x2 Quick Stats Grid */}
+            <View style={styles.statsGrid}>
+              {/* Row 1 */}
+              <View style={styles.statsGridRow}>
+                <View style={styles.statItemGrid}>
+                  <CheckCircle2 size={15} color="#34D399" />
+                  <View>
+                    <Text style={styles.statValueLarge}>{successCount}</Text>
+                    <Text style={styles.statLabelMuted}>Forwarded</Text>
+                  </View>
+                </View>
+                <View style={styles.statItemGrid}>
+                  <WifiOff size={15} color="#FBBF24" />
+                  <View>
+                    <Text style={styles.statValueLarge}>{queuedCount}</Text>
+                    <Text style={styles.statLabelMuted}>Queued</Text>
+                  </View>
+                </View>
+                <View style={styles.statItemGrid}>
+                  <ShieldAlert size={15} color="#F87171" />
+                  <View>
+                    <Text style={styles.statValueLarge}>{errorCount}</Text>
+                    <Text style={styles.statLabelMuted}>Dropped</Text>
+                  </View>
+                </View>
+              </View>
 
-            {/* Row 2 */}
-            <View style={styles.statsGridRow}>
-              <View style={styles.statItemGrid}>
-                <Filter size={15} color="#64748B" />
-                <View>
-                  <Text style={styles.statValueLarge}>{filteredCount}</Text>
-                  <Text style={styles.statLabelMuted}>Filtered</Text>
+              <View style={styles.statHorizontalDivider} />
+
+              {/* Row 2 */}
+              <View style={styles.statsGridRow}>
+                <View style={styles.statItemGrid}>
+                  <Filter size={15} color="#64748B" />
+                  <View>
+                    <Text style={styles.statValueLarge}>{filteredCount}</Text>
+                    <Text style={styles.statLabelMuted}>Filtered</Text>
+                  </View>
                 </View>
-              </View>
-              <View style={styles.statItemGrid}>
-                <Activity size={15} color="#38BDF8" />
-                <View>
-                  <Text style={styles.statValueLarge}>{successRate}{successRate === '--' ? '' : '%'}</Text>
-                  <Text style={styles.statLabelMuted}>Success Rate</Text>
+                <View style={styles.statItemGrid}>
+                  <Activity size={15} color="#38BDF8" />
+                  <View>
+                    <Text style={styles.statValueLarge}>{successRate}{successRate === '--' ? '' : '%'}</Text>
+                    <Text style={styles.statLabelMuted}>Success Rate</Text>
+                  </View>
                 </View>
-              </View>
-              <View style={styles.statItemGrid}>
-                <Zap size={15} color="#C084FC" />
-                <View>
-                  <Text style={styles.statValueLarge}>{log.length}</Text>
-                  <Text style={styles.statLabelMuted}>Total</Text>
+                <View style={styles.statItemGrid}>
+                  <Zap size={15} color="#C084FC" />
+                  <View>
+                    <Text style={styles.statValueLarge}>{log.length}</Text>
+                    <Text style={styles.statLabelMuted}>Total</Text>
+                  </View>
                 </View>
               </View>
             </View>
           </View>
         </View>
-      </View>
 
         {/* Collapsible Settings */}
         <TouchableOpacity
