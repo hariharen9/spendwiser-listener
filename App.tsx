@@ -45,7 +45,7 @@ import {
 import * as Notifications from 'expo-notifications';
 import { getSettings, saveSettings, getLog, processQueue } from './src/services/api';
 import { AppSettings, ActivityLogEntry } from './src/types';
-import { startSmsListener, stopSmsListener, registerQueueTask } from './src/services/background';
+import { startSmsListener, stopSmsListener, registerQueueTask, catchUpMissedSms } from './src/services/background';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -164,6 +164,8 @@ export default function App() {
       ) {
         // App just came to foreground — immediately refresh the log
         refreshLogOnly();
+        // Catch up any SMS missed while app was in background/killed
+        catchUpMissedSms().then(refreshLogOnly).catch(console.error);
         // Process any queued messages in the background (non-blocking)
         const s = settingsRef.current;
         if (s?.apiKey && s?.isListening) {
@@ -257,20 +259,26 @@ export default function App() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    // 1. Show latest log IMMEDIATELY (zero network wait)
-    const l = await getLog();
-    setLog(l);
-    // 2. Process queue in the background (non-blocking)
-    if (settings?.apiKey) {
-      processQueue(settings.apiKey, settings.webhookUrl)
-        .then(async () => {
-          // Refresh log again after queue flush completes
-          const updated = await getLog();
-          setLog(updated);
-        })
-        .catch(console.error)
-        .finally(() => setRefreshing(false));
-    } else {
+    try {
+      // 1. Show latest log IMMEDIATELY (zero network wait)
+      const l = await getLog();
+      setLog(l);
+      // 2. Catch up any SMS missed while the app was killed
+      const caughtUp = await catchUpMissedSms();
+      if (caughtUp > 0) {
+        // New entries were added — refresh log to show them
+        const afterCatchUp = await getLog();
+        setLog(afterCatchUp);
+      }
+      // 3. Process queue (retry any failed forwards)
+      if (settings?.apiKey) {
+        await processQueue(settings.apiKey, settings.webhookUrl);
+        const updated = await getLog();
+        setLog(updated);
+      }
+    } catch (e) {
+      console.error('[SpendWiser] Refresh failed:', e);
+    } finally {
       setRefreshing(false);
     }
   };

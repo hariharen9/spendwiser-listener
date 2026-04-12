@@ -12,9 +12,10 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         if (intent.action == Telephony.Sms.Intents.SMS_RECEIVED_ACTION) {
             val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
             if (messages.isNotEmpty()) {
-                val message = messages[0]
-                val originatingAddress = message.displayOriginatingAddress ?: ""
-                val messageBody = message.displayMessageBody ?: ""
+                val originatingAddress = messages[0].displayOriginatingAddress ?: ""
+                // Concatenate ALL PDU segments — bank SMS often exceeds 160 chars
+                // and keywords/amounts may be in part 2+
+                val messageBody = messages.joinToString("") { it.displayMessageBody ?: "" }
                 
                 Log.d("SpendWiserSms", "SMS received from: $originatingAddress")
 
