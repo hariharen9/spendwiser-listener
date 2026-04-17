@@ -17,6 +17,17 @@ export interface QueuedSms {
   error?: string;
 }
 
+export interface ScoreBreakdown {
+  signal: string;
+  points: number;
+}
+
+export interface ScoringResult {
+  score: number;
+  breakdown: ScoreBreakdown[];
+  isTransaction: boolean;
+}
+
 export interface ActivityLogEntry {
   id: string;
   smsText: string;
@@ -24,6 +35,9 @@ export interface ActivityLogEntry {
   timestamp: string;
   status: 'success' | 'failed' | 'queued';
   error?: string;
+  score?: number;
+  breakdown?: ScoreBreakdown[];
+  sender?: string;
 }
 
 export interface AppSettings {

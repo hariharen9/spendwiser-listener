@@ -3,7 +3,7 @@ import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getSettings, getLog, forwardToWebhook, addToQueue, addToLog, processQueue } from './api';
-import { shouldForwardSms } from '../utils/filter';
+import { scoreTransactionSms } from '../utils/filter';
 
 const QUEUE_TASK = 'BACKGROUND_QUEUE_TASK';
 const LAST_CATCHUP_KEY = 'last_catchup_ts';
@@ -41,22 +41,27 @@ export const headlessSmsHandler = async (taskData: { originatingAddress: string,
     return;
   }
 
-  if (shouldForwardSms(originatingAddress, messageBody)) {
+  const scoreResult = scoreTransactionSms(originatingAddress, messageBody);
+
+  if (scoreResult.isTransaction) {
     const messageId = Math.random().toString(36).substring(7);
     const result = await forwardToWebhook(settings.apiKey, settings.webhookUrl, messageBody);
     if (result.success) {
-      await addToLog({ id: messageId, smsText: messageBody, status: 'success' });
+      await addToLog({ id: messageId, smsText: messageBody, status: 'success', score: scoreResult.score, breakdown: scoreResult.breakdown, sender: originatingAddress });
       console.log('[SpendWiser Headless] Forwarded successfully.');
     } else {
       await addToQueue(messageId, messageBody);
-      await addToLog({ id: messageId, smsText: messageBody, status: 'queued', error: result.error });
+      await addToLog({ id: messageId, smsText: messageBody, status: 'queued', error: result.error, score: scoreResult.score, breakdown: scoreResult.breakdown, sender: originatingAddress });
       console.log(`[SpendWiser Headless] Forward failed, queued. Error: ${result.error}`);
     }
   } else {
     await addToLog({
       smsText: messageBody,
       status: 'failed',
-      error: 'Filtered out (no bank keywords/amount)',
+      error: 'Filtered out (confidence score too low)',
+      score: scoreResult.score,
+      breakdown: scoreResult.breakdown,
+      sender: originatingAddress
     });
     console.log('[SpendWiser Headless] Filtered out.');
   }
@@ -119,15 +124,16 @@ export const catchUpMissedSms = async (): Promise<number> => {
       const body = msg.body?.trim();
       if (!body || processedTexts.has(body)) continue;
 
+      const scoreResult = scoreTransactionSms(msg.address || '', body);
       // Only catch up on transaction SMS — skip spam/promos to avoid log flooding
-      if (shouldForwardSms(msg.address || '', body)) {
+      if (scoreResult.isTransaction) {
         const messageId = Math.random().toString(36).substring(7);
         const result = await forwardToWebhook(settings.apiKey, settings.webhookUrl, body);
         if (result.success) {
-          await addToLog({ id: messageId, smsText: body, status: 'success' });
+          await addToLog({ id: messageId, smsText: body, status: 'success', score: scoreResult.score, breakdown: scoreResult.breakdown, sender: msg.address || '' });
         } else {
           await addToQueue(messageId, body);
-          await addToLog({ id: messageId, smsText: body, status: 'queued', error: result.error });
+          await addToLog({ id: messageId, smsText: body, status: 'queued', error: result.error, score: scoreResult.score, breakdown: scoreResult.breakdown, sender: msg.address || '' });
         }
         catchUpCount++;
       }

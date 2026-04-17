@@ -16,7 +16,14 @@ import {
   Modal,
   ScrollView,
   AppState,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   Radio,
@@ -103,6 +110,7 @@ function StaticDot({ color }: { color: string }) {
 }
 
 export default function App() {
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [log, setLog] = useState<ActivityLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -321,6 +329,7 @@ export default function App() {
     const isSuccess = item.status === 'success';
     const isQueued = item.status === 'queued';
     const isFiltered = item.status === 'failed' && item.error?.includes('Filtered');
+    const isExpanded = expandedLogId === item.id;
 
     // Proper coloring for actual errors vs filtered vs success
     const iconColor = isSuccess ? '#34D399' : isQueued ? '#FBBF24' : isFiltered ? '#64748B' : '#F87171';
@@ -333,8 +342,13 @@ export default function App() {
       displaySummary = `💬 "${flatText.length > 40 ? flatText.substring(0, 40) + '...' : flatText}"`;
     }
 
+    const toggleExpand = () => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setExpandedLogId(isExpanded ? null : item.id);
+    };
+
     return (
-      <View style={[styles.logEntry, { borderLeftColor: iconColor, borderLeftWidth: 4 }]}>
+      <TouchableOpacity activeOpacity={0.8} onPress={toggleExpand} style={[styles.logEntry, { borderLeftColor: iconColor, borderLeftWidth: 4 }]}>
         <View style={styles.logTopRow}>
           <View style={[styles.logIconBadge, { backgroundColor: `${iconColor}18` }]}>
             <Icon size={14} color={iconColor} />
@@ -344,12 +358,67 @@ export default function App() {
             {(refreshing && isQueued) ? 'Syncing...' : getTimeAgo(item.timestamp)}
           </Text>
         </View>
-        {!!item.error && (
+
+        {!!item.error && !isExpanded && (
           <Text style={[styles.logError, isFiltered && { color: '#94A3B8' }]} numberOfLines={1}>
-            {isFiltered ? 'Filtered out (no bank keywords)' : `⚠ ${item.error}`}
+            {isFiltered ? 'Filtered out (score too low)' : `⚠ ${item.error}`}
           </Text>
         )}
-      </View>
+
+        {isExpanded && (
+          <View style={styles.expandedLogContainer}>
+            <View style={styles.expandedLogSenderRow}>
+              <Text style={styles.expandedLogSenderLabel}>📱 From:</Text>
+              <Text style={styles.expandedLogSenderText}>{item.sender || 'Unknown'}</Text>
+            </View>
+
+            <Text style={styles.expandedLogLabel}>Full Message:</Text>
+            <View style={styles.expandedLogMessageCard}>
+              <Text style={styles.expandedLogMessageText}>{item.smsText}</Text>
+            </View>
+
+            {item.score !== undefined && item.breakdown !== undefined && (
+              <>
+                <View style={styles.scoreRow}>
+                  <Text style={styles.scoreText}>
+                    Score: <Text style={{ color: item.score >= 60 ? '#34D399' : '#F87171' }}>{item.score}/60</Text>
+                  </Text>
+                  <Text style={[styles.scoreStatus, { color: item.score >= 60 ? '#34D399' : '#F87171' }]}>
+                    {item.score >= 60 ? '✅ FORWARDED' : '❌ IGNORED'}
+                  </Text>
+                </View>
+
+                {/* Score Bar */}
+                <View style={styles.scoreBarContainer}>
+                  <View style={[styles.scoreBarFill, { width: `${Math.min(100, Math.max(0, (item.score / 120) * 100))}%`, backgroundColor: item.score >= 60 ? '#34D399' : '#F87171' }]} />
+                </View>
+
+                <View style={styles.breakdownTable}>
+                  <View style={styles.breakdownHeader}>
+                    <Text style={styles.breakdownHeaderText}>Signal</Text>
+                    <Text style={styles.breakdownHeaderText}>Points</Text>
+                  </View>
+                  {item.breakdown.map((b, idx) => (
+                    <View key={idx} style={styles.breakdownRow}>
+                      <Text style={styles.breakdownRowText}>{b.signal}</Text>
+                      <Text style={[styles.breakdownRowPoints, { color: b.points > 0 ? '#34D399' : b.points < 0 ? '#F87171' : '#94A3B8' }]}>
+                        {b.points > 0 ? `+${b.points}` : b.points}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {!!item.error && (
+              <View style={styles.expandedErrorContainer}>
+                <ShieldAlert size={14} color="#F87171" style={{ marginRight: 6 }} />
+                <Text style={styles.expandedErrorText}>{item.error}</Text>
+              </View>
+            )}
+          </View>
+        )}
+      </TouchableOpacity>
     );
   };
 
@@ -1106,5 +1175,131 @@ const styles = StyleSheet.create({
     color: '#34D399',
     fontSize: 13,
     fontWeight: '600',
+  },
+
+  // Expanded Log Details
+  expandedLogContainer: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#1E293B',
+    paddingTop: 12,
+  },
+  expandedLogSenderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  expandedLogSenderLabel: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginRight: 6,
+  },
+  expandedLogSenderText: {
+    fontSize: 12,
+    color: '#E2E8F0',
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
+  },
+  expandedLogLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    textTransform: 'uppercase',
+    fontWeight: '700',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  expandedLogMessageCard: {
+    backgroundColor: '#0B1120',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    marginBottom: 12,
+  },
+  expandedLogMessageText: {
+    color: '#F1F5F9',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  scoreRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  scoreText: {
+    color: '#CBD5E1',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  scoreStatus: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  scoreBarContainer: {
+    height: 6,
+    backgroundColor: '#1E293B',
+    borderRadius: 3,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  scoreBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  breakdownTable: {
+    backgroundColor: '#0B1120',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  breakdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+    backgroundColor: '#111827',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+  },
+  breakdownHeaderText: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+  },
+  breakdownRowText: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    flex: 1,
+  },
+  breakdownRowPoints: {
+    fontSize: 12,
+    fontWeight: '700',
+    width: 30,
+    textAlign: 'right',
+  },
+  expandedErrorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8717115',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 10,
+  },
+  expandedErrorText: {
+    color: '#F87171',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });
