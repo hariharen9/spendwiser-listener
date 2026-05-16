@@ -2,8 +2,11 @@ name: Build and Release Android APK
 
 on:
   push:
+    branches:
+      - master
     tags:
       - 'v*' # Triggers the workflow on tag pushes matching v*, e.g., v1.0.0
+  workflow_dispatch: # Allows manual triggering from GitHub UI
 
 jobs:
   build:
@@ -40,7 +43,14 @@ jobs:
           chmod +x ./gradlew
           ./gradlew assembleRelease
 
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: android/app/build/outputs/apk/release/app-release.apk
+
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
           files: android/app/build/outputs/apk/release/app-release.apk
