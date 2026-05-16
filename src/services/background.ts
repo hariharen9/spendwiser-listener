@@ -128,7 +128,8 @@ export const catchUpMissedSms = async (): Promise<number> => {
       // Only catch up on transaction SMS — skip spam/promos to avoid log flooding
       if (scoreResult.isTransaction) {
         const messageId = Math.random().toString(36).substring(7);
-        const result = await forwardToWebhook(settings.apiKey, settings.webhookUrl, body);
+        const receivedAt = new Date(msg.date).toISOString();
+        const result = await forwardToWebhook(settings.apiKey, settings.webhookUrl, body, receivedAt);
         if (result.success) {
           await addToLog({ id: messageId, smsText: body, status: 'success', score: scoreResult.score, breakdown: scoreResult.breakdown, sender: msg.address || '' });
         } else {

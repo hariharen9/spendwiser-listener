@@ -78,7 +78,7 @@ export const updateLogEntryStatus = async (id: string, status: 'success' | 'fail
   }
 };
 
-export const forwardToWebhook = async (apiKey: string, webhookUrl: string, smsText: string): Promise<{ success: boolean; error?: string }> => {
+export const forwardToWebhook = async (apiKey: string, webhookUrl: string, smsText: string, receivedAt?: string): Promise<{ success: boolean; error?: string }> => {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -91,6 +91,7 @@ export const forwardToWebhook = async (apiKey: string, webhookUrl: string, smsTe
       body: JSON.stringify({
         apiKey,
         smsText,
+        receivedAt: receivedAt || new Date().toISOString(),
       }),
       signal: controller.signal,
     });
@@ -119,7 +120,7 @@ export const processQueue = async (apiKey: string, webhookUrl: string): Promise<
       continue;
     }
 
-    const result = await forwardToWebhook(apiKey, webhookUrl, item.smsText);
+    const result = await forwardToWebhook(apiKey, webhookUrl, item.smsText, item.timestamp);
     if (result.success) {
       await updateLogEntryStatus(item.id, 'success');
     } else {
